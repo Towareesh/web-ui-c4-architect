@@ -1,0 +1,115 @@
+.diagram-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  background: #1e1e1e;
+  color: #a0a0a0;
+}
+
+.placeholder-content {
+  text-align: center;
+  max-width: 500px;
+}
+
+.animation-container {
+  position: relative;
+  height: 120px;
+  margin-bottom: 30px;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #1976d2, #5e9ce0);
+  opacity: 0.7;
+}
+
+.circle-1 {
+  width: 80px;
+  height: 80px;
+  top: 20px;
+  left: calc(50% - 40px);
+  animation: pulse 3s infinite ease-in-out;
+}
+
+.circle-2 {
+  width: 60px;
+  height: 60px;
+  top: 30px;
+  left: calc(50% - 70px);
+  animation: pulse 3s infinite 0.5s ease-in-out;
+}
+
+.circle-3 {
+  width: 60px;
+  height: 60px;
+  top: 30px;
+  left: calc(50% + 10px);
+  animation: pulse 3s infinite 1s ease-in-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.1); opacity: 0.4; }
+  100% { transform: scale(1); opacity: 0.7; }
+}
+
+.c4-node {
+  background: #252526;
+  border: 2px solid;
+  border-radius: 8px;
+  padding: 0;
+  width: 250px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.3s ease;
+  overflow: hidden;
+}
+
+.node-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  position: relative;
+}
+
+.node-icon {
+  font-size: 24px;
+  margin-right: 10px;
+}
+
+.node-title {
+  font-weight: bold;
+  font-size: 16px;
+  color: #e0e0e0;
+  flex: 1;
+}
+
+.edit-icon {
+  color: #aaa;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.edit-icon:hover {
+  color: #fff;
+}
+
+.node-body {
+  padding: 10px 15px;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.node-type {
+  font-weight: 500;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}

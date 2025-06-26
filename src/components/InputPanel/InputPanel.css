@@ -1,0 +1,23 @@
+.input-panel {
+  padding: 16px;
+  background: #1e1e1e;
+  border-top: 1px solid #333;
+  transition: all 0.3s ease;
+}
+
+.input-panel.focused {
+  background: #252526;
+  box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.3);
+}
+
+.examples-container {
+  display: flex;
+  align-items: center;
+  margin-top: 10px;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.input-panel:hover .examples-container {
+  opacity: 1;
+}

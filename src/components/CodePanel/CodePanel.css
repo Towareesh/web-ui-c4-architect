@@ -1,0 +1,10 @@
+.code-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.editor-container {
+  flex: 1;
+  overflow: hidden;
+}
