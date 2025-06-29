@@ -9,9 +9,111 @@ import os
 import json
 import uuid
 import traceback
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+import jwt
+import datetime
+from functools import wraps
+from flask_migrate import Migrate
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, 
+     supports_credentials=True,
+     allow_headers=["Authorization", "Content-Type"],
+     methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"])
+app.config['SECRET_KEY'] = 'your_secret_key_here'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///c4architect.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+# Модель пользователя
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(120), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.now)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+    def generate_token(self):
+        payload = {
+            'exp': datetime.datetime.now() + datetime.timedelta(days=1),
+            'iat': datetime.datetime.now(),
+            'sub': str(self.id)  # Преобразуем ID в строку
+        }
+        return jwt.encode(payload, app.config['SECRET_KEY'], algorithm='HS256')
+
+# Создаем таблицы при первом запуске
+# Flask (начиная с 2.3) удален метод before_first_request
+# @app.before_first_request
+# def create_tables():
+#     db.create_all()
+
+
+# Декоратор для проверки аутентификации
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = None
+        if 'Authorization' in request.headers:
+            token = request.headers['Authorization'].split(" ")[1]
+        
+        print(f"Received token: {token}")  # Добавить логирование
+        
+        if not token:
+            return jsonify({'error': 'Token is missing'}), 401
+        
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            user_id = int(data['sub'])
+            current_user = User.query.get(user_id)
+            print(f"Authenticated user: {current_user.username}")  # Добавить логирование
+        except Exception as e:
+            print(f"Token validation error: {str(e)}")  # Добавить логирование
+            return jsonify({'error': 'Token is invalid'}), 401
+        
+        return f(current_user, *args, **kwargs)
+    return decorated
+
+# Эндпоинты аутентификации
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    if not username or not password:
+        return jsonify({'error': 'Username and password required'}), 400
+    
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    user = User(username=username)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    
+    return jsonify({'message': 'User created successfully'}), 201
+
+@app.route('/login', methods=['POST'])
+def login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    user = User.query.filter_by(username=username).first()
+    
+    if not user or not user.check_password(password):
+        return jsonify({'error': 'Invalid credentials'}), 401
+    
+    token = user.generate_token()
+    return jsonify({'token': token}), 200
 
 # Загрузка NER модели
 ner_model_path = "ner_model-20250625T131736Z-1-001/ner_model"
@@ -428,8 +530,11 @@ def convert_to_diagram_elements(hierarchy):
     
     return nodes, edges
 
+
+# Защищенные эндпоинты
 @app.route('/process', methods=['POST'])
-def process_text():
+@token_required
+def process_text(current_user):
     data = request.json
     text = data.get('text', '')
     
@@ -469,7 +574,8 @@ def process_text():
         })
 
 @app.route('/update-diagram', methods=['POST'])
-def update_diagram():
+@token_required
+def update_diagram(current_user):
     data = request.json
     hierarchy = data.get('hierarchy', {})
     
@@ -494,7 +600,8 @@ def update_diagram():
         })
 
 @app.route('/parse-plantuml', methods=['POST'])
-def parse_plantuml():
+@token_required
+def parse_plantuml(current_user):
     data = request.json
     code = data.get('code', '')
     
@@ -511,7 +618,8 @@ def parse_plantuml():
     })
 
 @app.route('/ai-assistant', methods=['POST'])
-def ai_assistant():
+@token_required
+def ai_assistant(current_user):
     data = request.json
     action = data.get('action', '')
     current_diagram = data.get('currentDiagram', {})
@@ -558,6 +666,12 @@ def ai_assistant():
         "edges": new_edges,
         "code": new_code
     })
+
+@app.cli.command("init-db")
+def init_db_command():
+    """Initialize the database."""
+    db.create_all()
+    print("Database initialized.")
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

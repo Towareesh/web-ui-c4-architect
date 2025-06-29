@@ -28,6 +28,7 @@ __pycache__/
 *.pyd
 myvenv/
 .env
+*.db
 
 # System files
 .DS_Store

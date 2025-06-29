@@ -25,6 +25,11 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { Node, Edge } from 'reactflow';
 
+import { AuthProvider, useAuth } from './context/AuthContext';
+import LoginForm from './components/Auth/LoginForm';
+import RegisterForm from './components/Auth/RegisterForm';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+
 // Определение типа для состояния диаграммы с иерархией
 interface DiagramData {
   nodes: Node[];
@@ -44,7 +49,90 @@ const App: React.FC = () => {
   const [newLabel, setNewLabel] = useState<string>('');
   const [editMode, setEditMode] = useState<'select' | 'addNode' | 'addConnection'>('select');
   const [connectionSource, setConnectionSource] = useState<string | null>(null);
-  const [connectionType, setConnectionType] = useState('uses');
+  const connectionType = 'uses';
+
+  const { token, login, logout, isAuthenticated } = useAuth();
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
+  const [isLoginView, setIsLoginView] = useState(true);
+
+  const authFetch = async (url: string, options: RequestInit = {}) => {
+    console.log('Using token:', token);
+
+    const headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+
+      console.log('Request headers:', headers);
+
+      return fetch(url, { ...options, headers });
+  };
+
+    const handleLogin = async (username: string, password: string) => {
+      setIsAuthLoading(true);
+      setAuthError(null);
+      
+      try {
+        const response = await fetch('http://localhost:5000/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username, password }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Login failed');
+        }
+        
+        const data = await response.json();
+        login(data.token);
+      } catch (err) {
+        let errorMessage = 'Authentication failed';
+        if (err instanceof Error) {
+          errorMessage = err.message;}
+        setAuthError(errorMessage);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    const handleRegister = async (username: string, password: string) => {
+      setIsAuthLoading(true);
+      setAuthError(null);
+      
+      try {
+        const response = await fetch('http://localhost:5000/register', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ username, password }),
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Registration failed');
+        }
+        
+        await handleLogin(username, password);
+      } catch (err) {
+        let errorMessage = 'Registration failed';
+        if (err instanceof Error) {
+          errorMessage = err.message;}
+        setAuthError(errorMessage);
+      } finally {
+        setIsAuthLoading(false);
+      }
+    };
+
+    const handleLogout = () => {
+      logout();
+      handleReset();
+    };
 
   // Функция для автоматического расположения узлов
   const layoutElements = useCallback((nodes: Node[], edges: Edge[]): DiagramData => { // Возвращает DiagramData
@@ -121,7 +209,7 @@ const App: React.FC = () => {
     setError(null);
     
     try {
-      const response = await fetch('http://localhost:5000/process', {
+      const response = await authFetch('http://localhost:5000/process', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -158,7 +246,7 @@ const App: React.FC = () => {
   // Применение изменений кода
   const handleApplyCode = useCallback(async (code: string) => {
     try {
-      const response = await fetch('http://localhost:5000/parse-plantuml', {
+      const response = await authFetch('http://localhost:5000/parse-plantuml', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -217,7 +305,7 @@ const App: React.FC = () => {
     try {
       setIsProcessing(true);
       
-      const response = await fetch('http://localhost:5000/ai-assistant', {
+      const response = await authFetch('http://localhost:5000/ai-assistant', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -341,6 +429,43 @@ const App: React.FC = () => {
     setError(null);
   };
 
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        height: '100vh',
+        bgcolor: 'background.default'
+      }}>
+        <Paper sx={{ p: 4, maxWidth: 400, width: '100%' }}>
+          <Typography variant="h5" align="center" gutterBottom>
+            C4 Model Architect
+          </Typography>
+          <Typography variant="subtitle1" align="center" sx={{ mb: 3 }}>
+            {isLoginView ? 'Sign in to continue' : 'Create a new account'}
+          </Typography>
+          
+          {isLoginView ? (
+            <LoginForm 
+              onLogin={handleLogin} 
+              onSwitchToRegister={() => setIsLoginView(false)}
+              error={authError || undefined} 
+              isLoading={isAuthLoading} 
+            />
+          ) : (
+            <RegisterForm 
+              onRegister={handleRegister} 
+              onSwitchToLogin={() => setIsLoginView(true)}
+              error={authError || undefined} 
+              isLoading={isAuthLoading} 
+            />
+          )}
+        </Paper>
+      </Box>
+    );
+  }
+
   return (
     <Box sx={{ 
       height: '100vh', 
@@ -402,32 +527,35 @@ const App: React.FC = () => {
           <IconButton 
             onClick={handleUndo} 
             disabled={historyIndex <= 0}
-            title="Undo"
-          >
+            title="Undo">
             <RefreshIcon sx={{ transform: 'scaleX(-1)' }} />
           </IconButton>
           
           <IconButton 
             onClick={handleRedo} 
             disabled={historyIndex >= history.length - 1}
-            title="Redo"
-          >
+            title="Redo">
             <RefreshIcon />
           </IconButton>
           
           <IconButton 
             onClick={handleReset} 
-            title="Reset"
-          >
+            title="Reset">
             <SettingsIcon />
           </IconButton>
           
           <IconButton 
             onClick={handleAddNode} 
             title="Add Node"
-            color="primary"
-          >
+            color="primary">
             <AddIcon />
+          </IconButton>
+
+          <IconButton 
+            onClick={handleLogout} 
+            title="Logout"
+            sx={{ ml: 1 }}>
+            <ExitToAppIcon />
           </IconButton>
         </Box>
       </Box>
@@ -523,4 +651,12 @@ const App: React.FC = () => {
   );
 };
 
-export default App;
+const AppWrapper: React.FC = () => {
+  return (
+    <AuthProvider>
+      <App />
+    </AuthProvider>
+  );
+};
+
+export default AppWrapper;
