@@ -16,6 +16,8 @@ import datetime
 from functools import wraps
 from flask_migrate import Migrate
 
+from customlogger import get_logger
+
 app = Flask(__name__)
 CORS(app, 
      supports_credentials=True,
@@ -70,7 +72,11 @@ def token_required(f):
             return jsonify({'error': 'Token is missing'}), 401
         
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
+            data = jwt.decode(
+                token,
+                app.config['SECRET_KEY'],
+                algorithms=['HS256'],
+                options={"verify_iat": False})
             user_id = int(data['sub'])
             current_user = User.query.get(user_id)
             print(f"Authenticated user: {current_user.username}")  # Добавить логирование
@@ -674,4 +680,7 @@ def init_db_command():
     print("Database initialized.")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    logger = get_logger(sreaming=True, name="flask app")
+    with app.app_context():
+        logger.info('app is run')
+        app.run(host='0.0.0.0', port=5000, debug=True)

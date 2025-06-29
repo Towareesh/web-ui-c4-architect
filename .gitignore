@@ -22,17 +22,21 @@ pnpm-debug.log*
 *.sw?
 
 # Backend (Python)
-__pycache__/
+*__pycache__/*
+*/__pycache__/*
+*/*/__pycache__/
 *.pyc
 *.pyo
 *.pyd
 myvenv/
 .env
 *.db
-
+*/migrations
+*/instance
 # System files
 .DS_Store
 Thumbs.db
+config.py
 
 # Игнорировать ВСЁ содержимое папки (включая подпапки и файлы)
 backend/ner_model-20250625T131736Z-1-001/**
