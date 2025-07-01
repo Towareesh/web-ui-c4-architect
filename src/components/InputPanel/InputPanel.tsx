@@ -62,7 +62,7 @@ const InputPanel: React.FC<InputPanelProps> = ({ onCreate, isLoading }) => {
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="examples-section">
+      {/* <div className="examples-section">
         <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
           Быстрый старт с готовыми примерами:
         </Typography>
@@ -94,7 +94,7 @@ const InputPanel: React.FC<InputPanelProps> = ({ onCreate, isLoading }) => {
             ))}
           </div>
         )}
-      </div>
+      </div> */}
 
       <TextField
         label="Опишите вашу систему"

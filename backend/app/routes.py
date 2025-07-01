@@ -9,8 +9,7 @@ from plantuml import PlantUML
 import base64
 import zlib
 import logging
-import os
-
+import os, time
 
 main_bp = Blueprint('main', __name__)
 nlp_processor = NLPProcessor()
@@ -83,6 +82,7 @@ def load_example(example_id):
 #         }), 500
 
 def encode_plantuml(text):
+    time.sleep(3)
     """Кодирование текста PlantUML для URL"""
     # Удаляем комментарии и лишние пробелы
     cleaned_text = '\n'.join([line for line in text.split('\n') if not line.strip().startswith("'") and line.strip()])
@@ -107,64 +107,74 @@ def encode_plantuml(text):
 @token_required
 def process_text(current_user):
     data = request.json
-    text = data.get('text', '').strip()
+    text = data.get('text', '')
     
     try:
-        # Проверяем, соответствует ли текст одному из примеров
-        examples_dir = os.path.join(os.path.dirname(__file__), '..', 'examples')
-        
-        # Ищем соответствие текста с заготовленными примерами
-        matched_example = None
+        # Проверяем, является ли текст предопределенным примером
+        example_texts = []
         for i in range(1, 4):
-            example_path = os.path.join(examples_dir, f'example{i}.txt')
-            if os.path.exists(example_path):
-                with open(example_path, 'r', encoding='utf-8') as f:
-                    example_text = f.read().strip()
-                    # Сравниваем нормализованные тексты (игнорируя регистр и лишние пробелы)
-                    if text.lower() == example_text.lower():
-                        matched_example = i
-                        break
+            text_path = os.path.join(EXAMPLES_DIR, f'example{i}.txt')
+            if os.path.exists(text_path):
+                with open(text_path, 'r', encoding='utf-8') as f:
+                    example_texts.append(f.read().strip())
         
-        # Если нашли совпадение, используем предопределенный PlantUML код
-        if matched_example:
-            puml_path = os.path.join(examples_dir, f'example{matched_example}_plantuml.txt')
-            if os.path.exists(puml_path):
-                with open(puml_path, 'r', encoding='utf-8') as f:
-                    plantuml_code = f.read()
-                
-                # Генерируем URL изображения
-                encoded = encode_plantuml(plantuml_code)
-                image_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
-                
-                return jsonify({
-                    "success": True,
-                    "plantuml_code": plantuml_code,
-                    "image_url": image_url,
-                    "is_example": True
-                })
+        # Если текст совпадает с одним из примеров, используем предопределенный PlantUML код
+        if text.strip() in example_texts:
+            example_idx = example_texts.index(text.strip()) + 1
+            puml_path = os.path.join(EXAMPLES_DIR, f'example{example_idx}_plantuml.txt')
+            with open(puml_path, 'r', encoding='utf-8') as f:
+                plantuml_code = f.read()
+        else:
+            # Генерация PlantUML кода с помощью Anthropic API
+            client = anthropic.Anthropic(
+                api_key=current_app.config['ANTHROPIC_API_KEY']
+            )
+            
+            # Системный промпт для генерации чистого PlantUML кода
+            system_prompt = """
+            Ты эксперт по разработке программных архитектур и использованию методологии C4 для визуализации.
+            Пользователь предоставит описание системы. Твоя задача - сгенерировать код на PlantUML для C4 диаграммы.
+            Используй стандартные библиотеки C4-PlantUML. Не добавляй пояснений, комментариев и дополнительного текста - 
+            выведи только чистый код PlantUML. Код должен начинаться с @startuml и заканчиваться @enduml.
+            Включай только необходимые элементы: системы, контейнеры, компоненты и связи между ними.
+            """
+            
+            # Формируем запрос
+            response = client.messages.create(
+                model="claude-3-opus-20240229",
+                max_tokens=2000,
+                system=system_prompt,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": f"Сгенерируй PlantUML код для C4 диаграммы на основе следующего описания:\n\n{text}"
+                    }
+                ]
+            )
+            
+            # Извлекаем чистый код из ответа
+            plantuml_code = response.content[0].text
+            
+            # Убедимся, что код начинается и заканчивается правильно
+            if not plantuml_code.strip().startswith('@startuml'):
+                plantuml_code = "@startuml\n" + plantuml_code
+            if not plantuml_code.strip().endswith('@enduml'):
+                plantuml_code = plantuml_code + "\n@enduml"
         
-        # Если не нашли совпадение, используем NLP обработку (в данном случае заглушку)
-        # В реальном приложении здесь должен быть вызов NLP-процессора
-        # result = nlp_processor.full_processing(text)
-        # Временно используем первый пример как заглушку для любых входных данных
-        with open(os.path.join(examples_dir, 'example1_plantuml.txt'), 'r', encoding='utf-8') as f:
-            plantuml_code = f.read()
-        
+        # Генерируем URL изображения
         encoded = encode_plantuml(plantuml_code)
         image_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
         
         return jsonify({
             "success": True,
             "plantuml_code": plantuml_code,
-            "image_url": image_url,
-            "is_example": False
+            "image_url": image_url
         })
-        
     except Exception as e:
-        current_app.logger.error(f"Processing error: {str(e)}")
+        current_app.logger.error(f"Error in AI processing: {str(e)}")
         return jsonify({
             "success": False,
-            "error": "Не удалось обработать требования. Пожалуйста, попробуйте снова."
+            "error": "Ошибка генерации диаграммы. Пожалуйста, попробуйте другое описание."
         }), 500
 
 
