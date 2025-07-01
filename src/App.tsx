@@ -56,6 +56,27 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   const [isLoginView, setIsLoginView] = useState(true);
 
+  const [diagramImageUrl, setDiagramImageUrl] = useState<string | null>(null);
+
+
+const handleDiagramChange = useCallback((nodes: Node[], edges: Edge[]) => {
+  if (diagramData) {
+    const updatedData: DiagramData = {
+      nodes,
+      edges,
+      hierarchy: diagramData.hierarchy
+    };
+    
+    setDiagramData(updatedData);
+    
+    // Обновляем историю
+    const newHistory = [...history];
+    newHistory[historyIndex] = updatedData;
+    setHistory(newHistory);
+  }
+}, [diagramData, history, historyIndex]);
+
+
   const authFetch = async (url: string, options: RequestInit = {}) => {
     console.log('Using token:', token);
 
@@ -174,13 +195,15 @@ const App: React.FC = () => {
       if (!connectionSource) {
         setConnectionSource(node.id);
       } else {
+        // Проверяем что source и target существуют
+        if (!connectionSource || !node.id) return;
         const newEdge: Edge = {
           id: `edge-${connectionSource}-${node.id}-${Date.now()}`,
           source: connectionSource,
           target: node.id,
           label: connectionType,
           animated: true
-        };
+        } as Edge;  // Явное приведение типа
 
         if (diagramData) {
           const updatedEdges = [...diagramData.edges, newEdge];
@@ -222,7 +245,8 @@ const App: React.FC = () => {
       }
       
       const data = await response.json();
-      
+      setDiagramImageUrl(data.image_url); // Используем image_url
+      setGeneratedCode(data.plantuml_code);
       // Автоматическое расположение узлов
       const positionedData = layoutElements(data.nodes, data.edges);
       
@@ -244,6 +268,38 @@ const App: React.FC = () => {
   };
 
   // Применение изменений кода
+  // const handleApplyCode = useCallback(async (code: string) => {
+  //   try {
+  //     const response = await authFetch('http://localhost:5000/parse-plantuml', {
+  //       method: 'POST',
+  //       headers: {
+  //         'Content-Type': 'application/json',
+  //       },
+  //       body: JSON.stringify({ code }),
+  //     });
+      
+  //     if (!response.ok) {
+  //       throw new Error('Ошибка при парсинге кода');
+  //     }
+      
+  //     const data = await response.json();
+      
+  //     const positionedData = layoutElements(data.nodes, data.edges);
+      
+  //     setDiagramData(positionedData);
+      
+  //     const newHistory = [...history.slice(0, historyIndex + 1), positionedData];
+  //     setHistory(newHistory);
+  //     setHistoryIndex(newHistory.length - 1);
+      
+  //     setGeneratedCode(code);
+      
+  //   } catch (err) {
+  //     setError('Не удалось обработать код. Пожалуйста, проверьте синтаксис.');
+  //     console.error(err);
+  //   }
+  // }, [history, historyIndex, layoutElements]);
+
   const handleApplyCode = useCallback(async (code: string) => {
     try {
       const response = await authFetch('http://localhost:5000/parse-plantuml', {
@@ -255,26 +311,18 @@ const App: React.FC = () => {
       });
       
       if (!response.ok) {
-        throw new Error('Ошибка при парсинге кода');
+        throw new Error('Ошибка при генерации диаграммы');
       }
       
       const data = await response.json();
-      
-      const positionedData = layoutElements(data.nodes, data.edges);
-      
-      setDiagramData(positionedData);
-      
-      const newHistory = [...history.slice(0, historyIndex + 1), positionedData];
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
-      
-      setGeneratedCode(code);
+      setDiagramImageUrl(data.image_url); // Используем image_url
+      setDiagramData(null);
       
     } catch (err) {
-      setError('Не удалось обработать код. Пожалуйста, проверьте синтаксис.');
+      setError('Не удалось сгенерировать изображение диаграммы.');
       console.error(err);
     }
-  }, [history, historyIndex, layoutElements]);
+  }, []);
 
   // Навигация по истории
   const handleUndo = () => {
@@ -583,7 +631,9 @@ const App: React.FC = () => {
           }}>
             <DiagramEditor 
               data={diagramData} 
+              imageUrl={diagramImageUrl} // Передаем URL изображения
               onNodeClick={editMode === 'addConnection' ? handleNodeClickForConnection : handleNodeClick}
+              onChange={handleDiagramChange}
             />
           </Paper>
           

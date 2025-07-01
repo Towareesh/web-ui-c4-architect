@@ -33,7 +33,7 @@ const getEntityColor = (entityType: string) => {
   }
 };
 
-const C4Node: React.FC<NodeProps> = ({ data }) => {
+const C4Node: React.FC<NodeProps> = ({ data, selected }) => {
   const icon = getEntityIcon(data.entityType);
   const color = getEntityColor(data.entityType);
   
@@ -44,7 +44,10 @@ const C4Node: React.FC<NodeProps> = ({ data }) => {
       animate={{ scale: 1, opacity: 1 }}
       transition={{ duration: 0.3 }}
       whileHover={{ boxShadow: `0 0 15px ${color}80` }}
-      style={{ borderColor: color }}
+      style={{
+        borderColor: color,
+        borderWidth: selected ? '2px' : '1px'
+       }}
     >
       <div className="node-header" style={{ backgroundColor: `${color}20` }}>
         <div className="node-icon">{icon}</div>

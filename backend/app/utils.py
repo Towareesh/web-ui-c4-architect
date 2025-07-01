@@ -1,4 +1,6 @@
 from .constants import ENTITY_TYPES, RELATION_TYPES, C4_LEVELS
+import re
+
 
 def build_c4_hierarchy(entities, relations):
     """Построение иерархии C4 из сущностей и отношений"""
@@ -21,7 +23,7 @@ def build_c4_hierarchy(entities, relations):
         if entity['type'] == 'SYSTEM':
             system = {
                 "id": entity['id'],
-                "name": entity['text'],
+                "name": entity['label'],  # Исправлено: text -> label
                 "description": "",
                 "containers": []
             }
@@ -29,14 +31,14 @@ def build_c4_hierarchy(entities, relations):
         elif entity['type'] == 'ACTOR':
             hierarchy["systems"].append({
                 "id": entity['id'],
-                "name": entity['text'],
+                "name": entity['label'],  # Исправлено: text -> label
                 "type": "actor",
                 "description": ""
             })
         elif entity['type'] == 'EXTERNAL_SYSTEM':
             hierarchy["systems"].append({
                 "id": entity['id'],
-                "name": entity['text'],
+                "name": entity['label'],  # Исправлено: text -> label
                 "type": "external",
                 "description": ""
             })
@@ -305,5 +307,135 @@ def convert_to_diagram_elements(hierarchy):
                     "level": 3
                 })
                 code_idx += 1
-    
+
+    # Убедимся что все связи имеют source и target
+    for edge in edges:
+        if not edge.get("source") or not edge.get("target"):
+            print(f"Warning: Invalid edge {edge['id']} - missing source or target")
+
     return nodes, edges
+
+
+def util_parse_plantuml(code: str):
+    """Парсинг PlantUML кода в иерархию C4"""
+    entities = []
+    relations = []
+    current_boundary = None
+    boundary_stack = []
+    
+    # Обновленные регулярные выражения
+    system_pattern = r'System(_Ext)?\s*\(\s*(\w+)\s*,\s*"([^"]+)"(?:[^)]*)\)?'
+    container_pattern = r'(Container|ContainerDb|Queue|SystemDb)\s*\(\s*(\w+)\s*,\s*"([^"]+)"(?:[^)]*)\)?'
+    component_pattern = r'Component\s*\(\s*(\w+)\s*,\s*"([^"]+)"(?:[^)]*)\)?'
+    rel_pattern = r'Rel\s*\(\s*(\w+)\s*,\s*(\w+)\s*,\s*"([^"]+)"(?:[^)]*)\)?'
+    boundary_pattern = r'(System_Boundary|Container_Boundary|Component_Boundary)\s*\(\s*(\w+)\s*,\s*"([^"]+)"\)\s*\{?'
+    end_boundary = r'\}'
+    person_pattern = r'Person_?Ext?\s*\(\s*(\w+)\s*,\s*"([^"]+)"(?:[^)]*)\)?'  # Новый шаблон для Person
+    
+    lines = code.split('\n')
+    for line in lines:
+        line = line.strip()
+        
+        # Пропускаем комментарии и пустые строки
+        if line.startswith("'") or not line:
+            continue
+            
+        # Определение границ
+        boundary_match = re.match(boundary_pattern, line)
+        if boundary_match:
+            boundary_type, boundary_id, boundary_label = boundary_match.groups()
+            current_boundary = {
+                'id': boundary_id,
+                'label': boundary_label,
+                'type': boundary_type.upper(),
+                'children': []
+            }
+            boundary_stack.append(current_boundary)
+            continue
+            
+        # Конец границы
+        if re.match(end_boundary, line) and boundary_stack:
+            finished_boundary = boundary_stack.pop()
+            if boundary_stack:
+                current_boundary = boundary_stack[-1]
+                current_boundary['children'].append(finished_boundary)
+            else:
+                entities.append(finished_boundary)
+            continue
+        
+        # Парсинг Person
+        person_match = re.match(person_pattern, line)
+        if person_match:
+            entity_id, entity_label = person_match.groups()[0:2]
+            entities.append({
+                'id': entity_id,
+                'label': entity_label,
+                'type': 'ACTOR',
+                'level': 1,
+                'parent': current_boundary['id'] if current_boundary else None
+            })
+            continue
+        
+        # Парсинг сущностей
+        system_match = re.match(system_pattern, line)
+        if system_match:
+            ext_flag = system_match.group(1)
+            entity_id = system_match.group(2)
+            entity_label = system_match.group(3)
+            entity_type = 'EXTERNAL_SYSTEM' if ext_flag else 'SYSTEM'
+            entities.append({
+                'id': entity_id,
+                'label': entity_label,
+                'type': entity_type,
+                'level': 1,
+                'parent': current_boundary['id'] if current_boundary else None
+            })
+            continue
+        
+        container_match = re.match(container_pattern, line)
+        if container_match:
+            container_type = container_match.group(1)
+            entity_id = container_match.group(2)
+            entity_label = container_match.group(3)
+            entity_type = 'DATABASE' if container_type in ['ContainerDb', 'SystemDb'] else 'QUEUE' if container_type == 'Queue' else 'CONTAINER'
+            entities.append({
+                'id': entity_id,
+                'label': entity_label,
+                'type': entity_type,
+                'level': 2,
+                'parent': current_boundary['id'] if current_boundary else None
+            })
+            continue
+        
+        component_match = re.match(component_pattern, line)
+        if component_match:
+            entity_id, entity_label = component_match.groups()[0:2]
+            entities.append({
+                'id': entity_id,
+                'label': entity_label,
+                'type': 'COMPONENT',
+                'level': 3,
+                'parent': current_boundary['id'] if current_boundary else None
+            })
+            continue
+        
+        # Парсинг связей
+        rel_match = re.match(rel_pattern, line)
+        if rel_match:
+            source, target, label = rel_match.groups()[0:3]
+            relations.append({
+                'source': source,
+                'target': target,
+                'label': label,
+                'type': 'RELATION'
+            })
+            
+    # Добавляем проверку на валидность связей
+    valid_relations = []
+    for rel in relations:
+        if rel['source'] and rel['target']:
+            valid_relations.append(rel)
+        else:
+            print(f"Invalid relation: {rel}")
+    
+    return build_c4_hierarchy(entities, valid_relations)
