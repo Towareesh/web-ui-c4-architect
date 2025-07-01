@@ -1,0 +1,21 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Интернет-магазин - Контейнеры
+
+Person(customer, "Клиент", "Покупает товары")
+
+System_Boundary(ecom_system, "Система интернет-магазина") {
+    Container(web_app, "Веб-приложение", "React", "Пользовательский интерфейс")
+    Container(api, "API сервер", "Python/Flask", "Обработка бизнес-логики")
+    ContainerDb(db, "База данных", "PostgreSQL", "Хранение товаров и заказов")
+    System_Ext(payment, "Платежный шлюз", "Обработка платежей")
+}
+
+Rel(customer, web_app, "Использует")
+Rel(web_app, api, "Вызывает API")
+Rel(api, db, "Читает/записывает данные")
+Rel(api, payment, "Инициирует платежи")
+
+@enduml

@@ -9,12 +9,61 @@ from plantuml import PlantUML
 import base64
 import zlib
 import logging
-
+import os
 
 
 main_bp = Blueprint('main', __name__)
 nlp_processor = NLPProcessor()
+EXAMPLES_DIR = os.path.join(os.path.dirname(__file__), '..', 'examples')
 
+@main_bp.route('/get-examples', methods=['GET'])
+def get_examples():
+    """Возвращает список доступных примеров"""
+    examples = []
+    for i in range(1, 4):
+        text_path = os.path.join(EXAMPLES_DIR, f'example{i}.txt')
+        if os.path.exists(text_path):
+            with open(text_path, 'r', encoding='utf-8') as f:
+                description = f.read().strip()[:100] + '...'  # Краткое описание
+            examples.append({
+                'id': i,
+                'title': f'Пример {i}',
+                'description': description
+            })
+    return jsonify(examples)
+
+@main_bp.route('/load-example/<int:example_id>', methods=['GET'])
+def load_example(example_id):
+    """Загружает конкретный пример по ID"""
+    try:
+        examples_dir = os.path.join(os.path.dirname(__file__), '..', 'examples')
+        
+        # Загрузка текста описания
+        text_path = os.path.join(examples_dir, f'example{example_id}.txt')
+        with open(text_path, 'r', encoding='utf-8') as f:
+            text = f.read()
+        
+        # Загрузка PlantUML кода
+        puml_path = os.path.join(examples_dir, f'example{example_id}_plantuml.txt')
+        with open(puml_path, 'r', encoding='utf-8') as f:
+            plantuml_code = f.read()
+        
+        # Генерация URL изображения для предпросмотра
+        encoded = encode_plantuml(plantuml_code)
+        image_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
+        
+        return jsonify({
+            "success": True,
+            "text": text,
+            "plantuml_code": plantuml_code,
+            "image_url": image_url
+        })
+    except Exception as e:
+        current_app.logger.error(f"Load example error: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": "Пример не найден"
+        }), 404
 # @main_bp.route('/process', methods=['POST'])
 # @token_required
 # def process_text(current_user):
@@ -58,107 +107,64 @@ def encode_plantuml(text):
 @token_required
 def process_text(current_user):
     data = request.json
-    text = data.get('text', '')
+    text = data.get('text', '').strip()
     
     try:
-        # Временное решение - генерируем фиктивный PlantUML код
-        plantuml_code = """
-@startuml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.pum
-' ==== Контекстная диаграмма (Level 1) ====
-title Системный контекст: Кластер СУБ
-Person(admin, "Администратор БД", "Управляет кластером, безопасностью, резервными копиями")
-Person(dev, "Разработчик", "Создает схемы данных, пишет запросы")
-Person(analyst, "Аналитик данных", "Выполняет сложные аналитические запросы")
-System_Boundary(db_cluster, "Высокодоступный кластер СУБД") {
-    System(db_system, "Система управления базами данных", "Обработка SQL-запросов, транзакции, хранение данных")
-
-System_Ext(app1, "Веб-приложение", "Основной потребитель данных")
-System_Ext(app2, "Мобильное приложение", "Вторичный потребитель данных")
-System_Ext(bi_tool, "BI-система", "Аналитика и отчетность"
-Rel(admin, db_system, "Администрирует", "CLI/GUI")
-Rel(dev, db_system, "Разрабатывает", "SQL/API")
-Rel(analyst, db_system, "Анализирует данные", "OLAP-запросы")
-Rel(app1, db_system, "CRUD операции", "JDBC/ODBC")
-Rel(app2, db_system, "Чтение данных", "REST API")
-Rel(bi_tool, db_system, "Сложные запросы", "SQL Connector"
-' ==== Диаграмма контейнеров (Level 2) ====
-title Диаграмма контейнеров: Архитектура кластер
-Container_Boundary(db_cluster_boundary, "Кластер СУБД") {
-    Container(query_node1, "Узел обработки запросов 1", "SQL Processor", "Обработка SELECT/INSERT/UPDATE/DELETE")
-    Container(query_node2, "Узел обработки запросов 2", "SQL Processor", "Балансировка нагрузки")
-    Container(storage_node1, "Узел хранения 1", "Storage Engine", "Шард A (Rows 1-10M)")
-    Container(storage_node2, "Узел хранения 2", "Storage Engine", "Шард B (Rows 10M-20M)")
-    Container(storage_node3, "Узел хранения 3", "Storage Engine", "Шард C (Rows 20M-30M)")
-    Container(backup_service, "Сервис резервного копирования", "Backup Manager", "Ежедневные бэкапы, PITR")
-    Container(monitoring, "Система мониторинга", "Prometheus Exporter", "Сбор метрик производительности")
-    Container(auth_service, "Сервис аутентификации", "RBAC Engine", "Управление пользователями и правами")
-
-ContainerDb(shared_storage, "Общее хранилище", "Distributed FS", "Холодные данные, бэкапы")
-System_Ext(cloud_storage, "Облачное хранилище", "AWS S3/Azure Blob", "Геораспределенные бэкапы"
-Rel(admin, auth_service, "Управление пользователями", "Admin API")
-Rel(admin, backup_service, "Инициирование бэкапов", "Control API")
-Rel(dev, query_node1, "Выполнение запросов", "SQL Protocol")
-Rel(analyst, query_node1, "Аналитические запросы", "SQL Protocol"
-Rel_R(query_node1, storage_node1, "Чтение/запись данных", "Internal RPC")
-Rel_R(query_node1, storage_node2, "Чтение/запись данных", "Internal RPC")
-Rel_R(query_node2, storage_node2, "Чтение/запись данных", "Internal RPC")
-Rel_R(query_node2, storage_node3, "Чтение/запись данных", "Internal RPC"
-Rel(storage_node1, storage_node2, "Синхронная репликация", "RAFT")
-Rel(storage_node2, storage_node3, "Синхронная репликация", "RAFT"
-Rel(backup_service, storage_node1, "Создание снепшотов", "Snapshot API")
-Rel(backup_service, storage_node2, "Создание снепшотов", "Snapshot API")
-Rel(backup_service, storage_node3, "Создание снепшотов", "Snapshot API")
-Rel(backup_service, shared_storage, "Хранение бэкапов", "NFS")
-Rel(backup_service, cloud_storage, "Гео-репликация бэкапов", "HTTPS"
-Rel(monitoring, query_node1, "Сбор метрик", "Metrics API")
-Rel(monitoring, storage_node1, "Сбор метрик", "Metrics API")
-Rel(admin, monitoring, "Просмотр дашбордов", "Grafana UI"
-Rel(auth_service, query_node1, "Проверка прав доступа", "Auth API")
-Rel(auth_service, storage_node1, "Проверка шифрования", "Security API"
-' ==== Диаграмма компонентов узла хранения (Level 3) ====
-title Компоненты узла хранени
-Container_Boundary(storage_node, "Узел хранения данных") {
-    Component(transaction_mgr, "Менеджер транзакций", "ACID", "Управление BEGIN/COMMIT/ROLLBACK")
-    Component(storage_engine, "Движок хранения", "Storage", "Row/Columnar/JSON/BLOB")
-    Component(index_mgr, "Менеджер индексов", "Indexing", "B-Tree, Hash, GIN/GIST")
-    Component(replication, "Модуль репликации", "RAFT", "Синхронная/асинхронная репликация")
-    Component(encryption, "Шифрование данных", "AES-256", "TDE (шифрование на лету)")
-    Component(wal, "Журнал транзакций", "WAL Manager", "Write-Ahead Logging")
-    Component(query_exec, "Исполнитель запросов", "Executor", "Локальное выполнение части запросов")
-    Component(cache, "Кэширующий слой", "Buffer Pool", "In-Memory кэширование данных")
-    
-    ComponentDb(data_files, "Файлы данных", "Columnar/Row", "Постоянное хранение")
-    ComponentDb(wal_files, "WAL файлы", "Append-only", "Журнал предзаписи")
-
-Rel(transaction_mgr, wal, "Запись операций", "WAL Protocol")
-Rel(transaction_mgr, replication, "Распространение изменений")
-Rel(query_exec, storage_engine, "Чтение/запись данных")
-Rel(query_exec, index_mgr, "Использование индексов")
-Rel(query_exec, cache, "Кэширование результатов")
-Rel(storage_engine, data_files, "Сохранение на диск")
-Rel(storage_engine, encryption, "Шифрование/дешифровка")
-Rel(cache, data_files, "Загрузка/выгрузка страниц")
-Rel(wal, wal_files, "Запись журнала")
-Rel(index_mgr, data_files, "Построение индексов")
-Rel(replication, wal, "Чтение журнала для репликации"
-@enduml """
+        # Проверяем, соответствует ли текст одному из примеров
+        examples_dir = os.path.join(os.path.dirname(__file__), '..', 'examples')
         
-        # Генерируем URL изображения
-        pl = PlantUML(url='http://www.plantuml.com/plantuml')
-        image_url = pl.get_url(plantuml_code)
+        # Ищем соответствие текста с заготовленными примерами
+        matched_example = None
+        for i in range(1, 4):
+            example_path = os.path.join(examples_dir, f'example{i}.txt')
+            if os.path.exists(example_path):
+                with open(example_path, 'r', encoding='utf-8') as f:
+                    example_text = f.read().strip()
+                    # Сравниваем нормализованные тексты (игнорируя регистр и лишние пробелы)
+                    if text.lower() == example_text.lower():
+                        matched_example = i
+                        break
+        
+        # Если нашли совпадение, используем предопределенный PlantUML код
+        if matched_example:
+            puml_path = os.path.join(examples_dir, f'example{matched_example}_plantuml.txt')
+            if os.path.exists(puml_path):
+                with open(puml_path, 'r', encoding='utf-8') as f:
+                    plantuml_code = f.read()
+                
+                # Генерируем URL изображения
+                encoded = encode_plantuml(plantuml_code)
+                image_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
+                
+                return jsonify({
+                    "success": True,
+                    "plantuml_code": plantuml_code,
+                    "image_url": image_url,
+                    "is_example": True
+                })
+        
+        # Если не нашли совпадение, используем NLP обработку (в данном случае заглушку)
+        # В реальном приложении здесь должен быть вызов NLP-процессора
+        # result = nlp_processor.full_processing(text)
+        # Временно используем первый пример как заглушку для любых входных данных
+        with open(os.path.join(examples_dir, 'example1_plantuml.txt'), 'r', encoding='utf-8') as f:
+            plantuml_code = f.read()
+        
+        encoded = encode_plantuml(plantuml_code)
+        image_url = f"https://www.plantuml.com/plantuml/png/{encoded}"
         
         return jsonify({
             "success": True,
             "plantuml_code": plantuml_code,
-            "image_url": image_url
+            "image_url": image_url,
+            "is_example": False
         })
+        
     except Exception as e:
+        current_app.logger.error(f"Processing error: {str(e)}")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": "Не удалось обработать требования. Пожалуйста, попробуйте снова."
         }), 500
 
 

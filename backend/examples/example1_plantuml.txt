@@ -1,0 +1,15 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Система управления библиотекой - Контекст
+
+Person(user, "Пользователь", "Регистрируется, ищет книги, бронирует")
+Person(admin, "Администратор", "Управляет каталогом книг и пользователями")
+
+System(lib_system, "Библиотечная система", "Онлайн-система управления библиотекой")
+
+Rel(user, lib_system, "Использует для поиска и бронирования книг")
+Rel(admin, lib_system, "Администрирует систему")
+
+@enduml

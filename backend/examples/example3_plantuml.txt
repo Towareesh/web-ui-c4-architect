@@ -1,0 +1,25 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title Такси-сервис - Компоненты
+
+Person(passenger, "Пассажир", "Заказывает поездки")
+Person(driver, "Водитель", "Принимает заказы")
+
+System_Boundary(taxi_system, "Такси-сервис") {
+    Container(passenger_app, "Приложение пассажира", "iOS/Android", "Заказ поездок")
+    Container(driver_app, "Приложение водителя", "iOS/Android", "Прием заказов")
+    Container(dispatch, "Диспетчерский сервис", "Go", "Сопоставление заказов")
+    ContainerDb(trips_db, "База поездок", "MongoDB", "Хранение данных о поездках")
+    System_Ext(maps, "Картографический сервис", "Геолокация и маршруты")
+}
+
+Rel(passenger, passenger_app, "Использует")
+Rel(driver, driver_app, "Использует")
+Rel(passenger_app, dispatch, "Отправляет заказ")
+Rel(dispatch, driver_app, "Назначает заказ")
+Rel(dispatch, trips_db, "Сохраняет данные")
+Rel(dispatch, maps, "Запрашивает маршруты")
+
+@enduml
