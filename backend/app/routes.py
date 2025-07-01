@@ -63,106 +63,88 @@ def process_text(current_user):
     try:
         # Временное решение - генерируем фиктивный PlantUML код
         plantuml_code = """
-        @startuml
-        !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
-        !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
-        !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.pum
+' ==== Контекстная диаграмма (Level 1) ====
+title Системный контекст: Кластер СУБ
+Person(admin, "Администратор БД", "Управляет кластером, безопасностью, резервными копиями")
+Person(dev, "Разработчик", "Создает схемы данных, пишет запросы")
+Person(analyst, "Аналитик данных", "Выполняет сложные аналитические запросы")
+System_Boundary(db_cluster, "Высокодоступный кластер СУБД") {
+    System(db_system, "Система управления базами данных", "Обработка SQL-запросов, транзакции, хранение данных")
 
-        ' ==== Контекстная диаграмма (Level 1) ====
-        title Системный контекст: Кластер СУБД
+System_Ext(app1, "Веб-приложение", "Основной потребитель данных")
+System_Ext(app2, "Мобильное приложение", "Вторичный потребитель данных")
+System_Ext(bi_tool, "BI-система", "Аналитика и отчетность"
+Rel(admin, db_system, "Администрирует", "CLI/GUI")
+Rel(dev, db_system, "Разрабатывает", "SQL/API")
+Rel(analyst, db_system, "Анализирует данные", "OLAP-запросы")
+Rel(app1, db_system, "CRUD операции", "JDBC/ODBC")
+Rel(app2, db_system, "Чтение данных", "REST API")
+Rel(bi_tool, db_system, "Сложные запросы", "SQL Connector"
+' ==== Диаграмма контейнеров (Level 2) ====
+title Диаграмма контейнеров: Архитектура кластер
+Container_Boundary(db_cluster_boundary, "Кластер СУБД") {
+    Container(query_node1, "Узел обработки запросов 1", "SQL Processor", "Обработка SELECT/INSERT/UPDATE/DELETE")
+    Container(query_node2, "Узел обработки запросов 2", "SQL Processor", "Балансировка нагрузки")
+    Container(storage_node1, "Узел хранения 1", "Storage Engine", "Шард A (Rows 1-10M)")
+    Container(storage_node2, "Узел хранения 2", "Storage Engine", "Шард B (Rows 10M-20M)")
+    Container(storage_node3, "Узел хранения 3", "Storage Engine", "Шард C (Rows 20M-30M)")
+    Container(backup_service, "Сервис резервного копирования", "Backup Manager", "Ежедневные бэкапы, PITR")
+    Container(monitoring, "Система мониторинга", "Prometheus Exporter", "Сбор метрик производительности")
+    Container(auth_service, "Сервис аутентификации", "RBAC Engine", "Управление пользователями и правами")
 
-        Person(admin, "Администратор БД", "Управляет кластером, безопасностью, резервными копиями")
-        Person(dev, "Разработчик", "Создает схемы данных, пишет запросы")
-        Person(analyst, "Аналитик данных", "Выполняет сложные аналитические запросы")
-        System_Boundary(db_cluster, "Высокодоступный кластер СУБД") {
-            System(db_system, "Система управления базами данных", "Обработка SQL-запросов, транзакции, хранение данных")
-        }
+ContainerDb(shared_storage, "Общее хранилище", "Distributed FS", "Холодные данные, бэкапы")
+System_Ext(cloud_storage, "Облачное хранилище", "AWS S3/Azure Blob", "Геораспределенные бэкапы"
+Rel(admin, auth_service, "Управление пользователями", "Admin API")
+Rel(admin, backup_service, "Инициирование бэкапов", "Control API")
+Rel(dev, query_node1, "Выполнение запросов", "SQL Protocol")
+Rel(analyst, query_node1, "Аналитические запросы", "SQL Protocol"
+Rel_R(query_node1, storage_node1, "Чтение/запись данных", "Internal RPC")
+Rel_R(query_node1, storage_node2, "Чтение/запись данных", "Internal RPC")
+Rel_R(query_node2, storage_node2, "Чтение/запись данных", "Internal RPC")
+Rel_R(query_node2, storage_node3, "Чтение/запись данных", "Internal RPC"
+Rel(storage_node1, storage_node2, "Синхронная репликация", "RAFT")
+Rel(storage_node2, storage_node3, "Синхронная репликация", "RAFT"
+Rel(backup_service, storage_node1, "Создание снепшотов", "Snapshot API")
+Rel(backup_service, storage_node2, "Создание снепшотов", "Snapshot API")
+Rel(backup_service, storage_node3, "Создание снепшотов", "Snapshot API")
+Rel(backup_service, shared_storage, "Хранение бэкапов", "NFS")
+Rel(backup_service, cloud_storage, "Гео-репликация бэкапов", "HTTPS"
+Rel(monitoring, query_node1, "Сбор метрик", "Metrics API")
+Rel(monitoring, storage_node1, "Сбор метрик", "Metrics API")
+Rel(admin, monitoring, "Просмотр дашбордов", "Grafana UI"
+Rel(auth_service, query_node1, "Проверка прав доступа", "Auth API")
+Rel(auth_service, storage_node1, "Проверка шифрования", "Security API"
+' ==== Диаграмма компонентов узла хранения (Level 3) ====
+title Компоненты узла хранени
+Container_Boundary(storage_node, "Узел хранения данных") {
+    Component(transaction_mgr, "Менеджер транзакций", "ACID", "Управление BEGIN/COMMIT/ROLLBACK")
+    Component(storage_engine, "Движок хранения", "Storage", "Row/Columnar/JSON/BLOB")
+    Component(index_mgr, "Менеджер индексов", "Indexing", "B-Tree, Hash, GIN/GIST")
+    Component(replication, "Модуль репликации", "RAFT", "Синхронная/асинхронная репликация")
+    Component(encryption, "Шифрование данных", "AES-256", "TDE (шифрование на лету)")
+    Component(wal, "Журнал транзакций", "WAL Manager", "Write-Ahead Logging")
+    Component(query_exec, "Исполнитель запросов", "Executor", "Локальное выполнение части запросов")
+    Component(cache, "Кэширующий слой", "Buffer Pool", "In-Memory кэширование данных")
+    
+    ComponentDb(data_files, "Файлы данных", "Columnar/Row", "Постоянное хранение")
+    ComponentDb(wal_files, "WAL файлы", "Append-only", "Журнал предзаписи")
 
-        System_Ext(app1, "Веб-приложение", "Основной потребитель данных")
-        System_Ext(app2, "Мобильное приложение", "Вторичный потребитель данных")
-        System_Ext(bi_tool, "BI-система", "Аналитика и отчетность")
-
-        Rel(admin, db_system, "Администрирует", "CLI/GUI")
-        Rel(dev, db_system, "Разрабатывает", "SQL/API")
-        Rel(analyst, db_system, "Анализирует данные", "OLAP-запросы")
-        Rel(app1, db_system, "CRUD операции", "JDBC/ODBC")
-        Rel(app2, db_system, "Чтение данных", "REST API")
-        Rel(bi_tool, db_system, "Сложные запросы", "SQL Connector")
-
-        ' ==== Диаграмма контейнеров (Level 2) ====
-        title Диаграмма контейнеров: Архитектура кластера
-
-        Container_Boundary(db_cluster_boundary, "Кластер СУБД") {
-            Container(query_node1, "Узел обработки запросов 1", "SQL Processor", "Обработка SELECT/INSERT/UPDATE/DELETE")
-            Container(query_node2, "Узел обработки запросов 2", "SQL Processor", "Балансировка нагрузки")
-            Container(storage_node1, "Узел хранения 1", "Storage Engine", "Шард A (Rows 1-10M)")
-            Container(storage_node2, "Узел хранения 2", "Storage Engine", "Шард B (Rows 10M-20M)")
-            Container(storage_node3, "Узел хранения 3", "Storage Engine", "Шард C (Rows 20M-30M)")
-            Container(backup_service, "Сервис резервного копирования", "Backup Manager", "Ежедневные бэкапы, PITR")
-            Container(monitoring, "Система мониторинга", "Prometheus Exporter", "Сбор метрик производительности")
-            Container(auth_service, "Сервис аутентификации", "RBAC Engine", "Управление пользователями и правами")
-        }
-
-        ContainerDb(shared_storage, "Общее хранилище", "Distributed FS", "Холодные данные, бэкапы")
-        System_Ext(cloud_storage, "Облачное хранилище", "AWS S3/Azure Blob", "Геораспределенные бэкапы")
-
-        Rel(admin, auth_service, "Управление пользователями", "Admin API")
-        Rel(admin, backup_service, "Инициирование бэкапов", "Control API")
-        Rel(dev, query_node1, "Выполнение запросов", "SQL Protocol")
-        Rel(analyst, query_node1, "Аналитические запросы", "SQL Protocol")
-
-        Rel_R(query_node1, storage_node1, "Чтение/запись данных", "Internal RPC")
-        Rel_R(query_node1, storage_node2, "Чтение/запись данных", "Internal RPC")
-        Rel_R(query_node2, storage_node2, "Чтение/запись данных", "Internal RPC")
-        Rel_R(query_node2, storage_node3, "Чтение/запись данных", "Internal RPC")
-
-        Rel(storage_node1, storage_node2, "Синхронная репликация", "RAFT")
-        Rel(storage_node2, storage_node3, "Синхронная репликация", "RAFT")
-
-        Rel(backup_service, storage_node1, "Создание снепшотов", "Snapshot API")
-        Rel(backup_service, storage_node2, "Создание снепшотов", "Snapshot API")
-        Rel(backup_service, storage_node3, "Создание снепшотов", "Snapshot API")
-        Rel(backup_service, shared_storage, "Хранение бэкапов", "NFS")
-        Rel(backup_service, cloud_storage, "Гео-репликация бэкапов", "HTTPS")
-
-        Rel(monitoring, query_node1, "Сбор метрик", "Metrics API")
-        Rel(monitoring, storage_node1, "Сбор метрик", "Metrics API")
-        Rel(admin, monitoring, "Просмотр дашбордов", "Grafana UI")
-
-        Rel(auth_service, query_node1, "Проверка прав доступа", "Auth API")
-        Rel(auth_service, storage_node1, "Проверка шифрования", "Security API")
-
-        ' ==== Диаграмма компонентов узла хранения (Level 3) ====
-        title Компоненты узла хранения
-
-        Container_Boundary(storage_node, "Узел хранения данных") {
-            Component(transaction_mgr, "Менеджер транзакций", "ACID", "Управление BEGIN/COMMIT/ROLLBACK")
-            Component(storage_engine, "Движок хранения", "Storage", "Row/Columnar/JSON/BLOB")
-            Component(index_mgr, "Менеджер индексов", "Indexing", "B-Tree, Hash, GIN/GIST")
-            Component(replication, "Модуль репликации", "RAFT", "Синхронная/асинхронная репликация")
-            Component(encryption, "Шифрование данных", "AES-256", "TDE (шифрование на лету)")
-            Component(wal, "Журнал транзакций", "WAL Manager", "Write-Ahead Logging")
-            Component(query_exec, "Исполнитель запросов", "Executor", "Локальное выполнение части запросов")
-            Component(cache, "Кэширующий слой", "Buffer Pool", "In-Memory кэширование данных")
-            
-            ComponentDb(data_files, "Файлы данных", "Columnar/Row", "Постоянное хранение")
-            ComponentDb(wal_files, "WAL файлы", "Append-only", "Журнал предзаписи")
-        }
-
-        Rel(transaction_mgr, wal, "Запись операций", "WAL Protocol")
-        Rel(transaction_mgr, replication, "Распространение изменений")
-        Rel(query_exec, storage_engine, "Чтение/запись данных")
-        Rel(query_exec, index_mgr, "Использование индексов")
-        Rel(query_exec, cache, "Кэширование результатов")
-        Rel(storage_engine, data_files, "Сохранение на диск")
-        Rel(storage_engine, encryption, "Шифрование/дешифровка")
-        Rel(cache, data_files, "Загрузка/выгрузка страниц")
-        Rel(wal, wal_files, "Запись журнала")
-        Rel(index_mgr, data_files, "Построение индексов")
-        Rel(replication, wal, "Чтение журнала для репликации")
-
-        @enduml
-        """
+Rel(transaction_mgr, wal, "Запись операций", "WAL Protocol")
+Rel(transaction_mgr, replication, "Распространение изменений")
+Rel(query_exec, storage_engine, "Чтение/запись данных")
+Rel(query_exec, index_mgr, "Использование индексов")
+Rel(query_exec, cache, "Кэширование результатов")
+Rel(storage_engine, data_files, "Сохранение на диск")
+Rel(storage_engine, encryption, "Шифрование/дешифровка")
+Rel(cache, data_files, "Загрузка/выгрузка страниц")
+Rel(wal, wal_files, "Запись журнала")
+Rel(index_mgr, data_files, "Построение индексов")
+Rel(replication, wal, "Чтение журнала для репликации"
+@enduml """
         
         # Генерируем URL изображения
         pl = PlantUML(url='http://www.plantuml.com/plantuml')
